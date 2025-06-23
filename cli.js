@@ -1,0 +1,89 @@
+import inquirer from "inquirer";
+import { mainProcess } from "./index.js";
+
+const games = [
+    { name: "iRacing", value: 19554 }
+]
+
+const questions = [
+    {
+        type: "list",
+        name: "gameId",
+        message: "Choose a game",
+        choices: games
+    },
+    {
+        type: "input",
+        name: "lowestViewCount",
+        message: "Minimum view count for clips:",
+        default: 100,
+        validate: val => !isNaN(val) && parseInt(val) >= 0
+    },
+    {
+        type: 'input',
+        name: 'maximumClips',
+        message: 'Maximum number of clips:',
+        default: 60,
+        validate: val => !isNaN(val) && parseInt(val) >= 0
+    },
+    {
+        type: 'input',
+        name: 'minVideoTime',
+        message: 'Minimum video time (seconds):',
+        default: 300,
+        validate: val => !isNaN(val) && parseInt(val) > 0
+    },
+    {
+        type: 'input',
+        name: 'maxVideoTime',
+        message: 'Maximum video time (seconds):',
+        default: 600,
+        validate: val => !isNaN(val) && parseInt(val) > 0
+    },
+]
+
+
+const runCLI = async () => {
+    const answers = await inquirer.prompt(questions);
+
+    const args = {
+        gameId: answers.gameId,
+        lowestViewCount: parseInt(answers.lowestViewCount),
+        maximumClips: answers.maximumClips > 0 ? parseInt(answers.maximumClips) : 60,
+        minVideoTime: parseInt(answers.minVideoTime),
+        maxVideoTime: parseInt(answers.maxVideoTime)
+  };
+
+
+  const selectedGame = games.find(g => g.value === answers.gameId);
+
+  // Display summary
+  console.log("\n📋 Job Summary:");
+  console.log(`Game: ${selectedGame?.name || 'Unknown'} (ID: ${args.gameId})`);
+  console.log(`Minimum View Count: ${args.lowestViewCount}`);
+  console.log(`Maximum Clips: ${args.maximumClips}`);
+  console.log(`Minimum Video Time: ${args.minVideoTime} seconds`);
+  console.log(`Maximum Video Time: ${args.maxVideoTime} seconds`);
+
+  const {confirm} = await inquirer.prompt({
+    type: 'confirm',
+    name: 'confirm',
+    message: 'Do you want to proceed with these settings?',
+    default: true
+  });
+
+  if (!confirm) {
+    console.log("Operation cancelled by user.");
+    process.exit(0);
+  }
+
+   await mainProcess(args);
+}
+
+runCLI()
+  .then(() => {
+    console.log("CLI executed successfully.");
+  })
+  .catch(error => {
+    console.error("Error executing CLI:", error);
+  });
