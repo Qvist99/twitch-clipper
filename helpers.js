@@ -41,7 +41,7 @@ export async function getAccesToken(client_id, client_secret){
     return data.access_token;
 }
 
-export async function getClipsFromTwitch(accessToken, clientId, gameId , lowestViewCount, maximumClips = 60) {
+export async function getClipsFromTwitch(accessToken, clientId, gameId , lowestViewCount, maximumClips = 60, daysAgo = 7) {
     console.log("Fetching clips from Twitch...");
 
     if (!accessToken || !clientId) {
@@ -56,8 +56,8 @@ export async function getClipsFromTwitch(accessToken, clientId, gameId , lowestV
 
     const now = dayjs()
     console.log(now.toISOString());
-    const lastWeek = now.subtract(7, 'day')
-    console.log(lastWeek.toISOString());
+    const startDate = now.subtract(daysAgo, 'day')
+    console.log(startDate.toISOString());
     const baseUrl = "https://api.twitch.tv/helix/clips";
 
 
@@ -69,7 +69,7 @@ let allClips = [];
     while (keepFetching) {
         const params = new URLSearchParams({
             game_id: gameId,
-            started_at: lastWeek.toISOString(),
+            started_at: startDate.toISOString(),
             ended_at: now.toISOString(),
             first: "100"
         });
@@ -206,8 +206,8 @@ export async function downloadClip(clip) {
         url: clipUrl,
     }
 }
-
-export function distributeClipsForVideo(clips, minVideoTime, maxVideoTime) {
+// add max videos to distributeClipsForVideo function
+export function distributeClipsForVideo(clips, minVideoTime, maxVideoTime, maxVideos) {
   const sorted = [...clips].sort((a, b) => b.viewCount - a.viewCount);
   const totalDuration = sorted.reduce((sum, clip) => sum + clip.duration, 0);
   const estimatedVideoCount = Math.ceil(totalDuration / maxVideoTime);

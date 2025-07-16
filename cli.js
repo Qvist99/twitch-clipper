@@ -2,7 +2,8 @@ import inquirer from "inquirer";
 import { mainProcess } from "./index.js";
 
 const games = [
-    { name: "iRacing", value: 19554 }
+    { name: "iRacing", value: 19554 },
+    { name: "Le Mans Ultimate", value: 2060730947 },
 ]
 
 const questions = [
@@ -40,6 +41,13 @@ const questions = [
         default: 600,
         validate: val => !isNaN(val) && parseInt(val) > 0
     },
+    {
+        type: 'input',
+        name: 'daysAgo',
+        message: 'Fetch clips from how many days ago?',
+        default: 7,
+        validate: val => !isNaN(val) && parseInt(val) > 0
+    }
 ]
 
 
@@ -51,7 +59,8 @@ const runCLI = async () => {
         lowestViewCount: parseInt(answers.lowestViewCount),
         maximumClips: answers.maximumClips > 0 ? parseInt(answers.maximumClips) : 60,
         minVideoTime: parseInt(answers.minVideoTime),
-        maxVideoTime: parseInt(answers.maxVideoTime)
+        maxVideoTime: parseInt(answers.maxVideoTime),
+        daysAgo: parseInt(answers.daysAgo)
   };
 
 

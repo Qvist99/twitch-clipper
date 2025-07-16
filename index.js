@@ -9,9 +9,10 @@ export async function mainProcess({
     minVideoTime, 
     maxVideoTime , 
     maximumClips, 
-    lowestViewCount
+    lowestViewCount,
+    daysAgo
 }) {
-    console.log(gameId, minVideoTime, maxVideoTime, maximumClips, lowestViewCount);
+    console.log(gameId, minVideoTime, maxVideoTime, maximumClips, lowestViewCount, daysAgo);
 
 if (!process.env.TWITCH_CLIENT_ID || !process.env.TWITCH_CLIENT_SECRET) {
     console.error("Please set the TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET environment variables.");
@@ -27,7 +28,7 @@ if (!accessToken) {
 
 console.log("Access Token received:", accessToken);
 
-const clips = await getClipsFromTwitch(accessToken, process.env.TWITCH_CLIENT_ID, gameId, lowestViewCount, maximumClips);
+const clips = await getClipsFromTwitch(accessToken, process.env.TWITCH_CLIENT_ID, gameId, lowestViewCount, maximumClips, daysAgo);
 
 if (!clips || clips.length === 0) {
     console.error("No clips found or failed to fetch clips.");
