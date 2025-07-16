@@ -204,6 +204,7 @@ export async function downloadClip(clip) {
         duration: clip.duration,
         viewCount: clip.view_count,
         url: clipUrl,
+        thumbnail: clip.thumbnail_url
     }
 }
 // add max videos to distributeClipsForVideo function

@@ -53,7 +53,14 @@ def main():
             line = f"{i + 1}. {clip['broadcaster']} — {clip.get('url', 'URL not provided')}\n"
             f.write(line)
 
-    print(f"Description file created: {description_path}") 
+    print(f"Description file created: {description_path}")
+
+    # Create a Json file for the final video that contains all thumbnails
+    thumbnails = [clip.get('thumbnail', 'No thumbnail') for clip in clips_info]
+    json_output_path = os.path.join("output", f"video_{video_index}_thumbnails.json")
+    with open(json_output_path, 'w', encoding='utf-8') as f:
+        json.dump({"thumbnails": thumbnails}, f, indent=4)
+    print(f"Thumbnails JSON file created: {json_output_path}")
 
 
 if __name__ == "__main__":
