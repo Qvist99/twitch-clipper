@@ -2,65 +2,80 @@ import inquirer from "inquirer";
 import { mainProcess } from "./index.js";
 
 const games = [
-    { name: "iRacing", value: 19554 },
-    { name: "Le Mans Ultimate", value: 2060730947 },
+  { name: "iRacing", value: 19554 },
+  { name: "Le Mans Ultimate", value: 2060730947 },
 ]
 
 const questions = [
-    {
-        type: "list",
-        name: "gameId",
-        message: "Choose a game",
-        choices: games
-    },
-    {
-        type: "input",
-        name: "lowestViewCount",
-        message: "Minimum view count for clips:",
-        default: 100,
-        validate: val => !isNaN(val) && parseInt(val) >= 0
-    },
-    {
-        type: 'input',
-        name: 'maximumClips',
-        message: 'Maximum number of clips:',
-        default: 60,
-        validate: val => !isNaN(val) && parseInt(val) >= 0
-    },
-    {
-        type: 'input',
-        name: 'minVideoTime',
-        message: 'Minimum video time (seconds):',
-        default: 300,
-        validate: val => !isNaN(val) && parseInt(val) > 0
-    },
-    {
-        type: 'input',
-        name: 'maxVideoTime',
-        message: 'Maximum video time (seconds):',
-        default: 600,
-        validate: val => !isNaN(val) && parseInt(val) > 0
-    },
-    {
-        type: 'input',
-        name: 'daysAgo',
-        message: 'Fetch clips from how many days ago?',
-        default: 7,
-        validate: val => !isNaN(val) && parseInt(val) > 0
-    }
+  {
+    type: "list",
+    name: "gameId",
+    message: "Choose a game",
+    choices: games
+  },
+  {
+    type: "input",
+    name: "lowestViewCount",
+    message: "Minimum view count for clips:",
+    default: 100,
+    validate: val => !isNaN(val) && parseInt(val) >= 0
+  },
+  {
+    type: 'input',
+    name: 'maximumClips',
+    message: 'Maximum number of clips:',
+    default: 60,
+    validate: val => !isNaN(val) && parseInt(val) >= 0
+  },
+  {
+    type: 'input',
+    name: 'minVideoTime',
+    message: 'Minimum video time (seconds):',
+    default: 300,
+    validate: val => !isNaN(val) && parseInt(val) > 0
+  },
+  {
+    type: 'input',
+    name: 'maxVideoTime',
+    message: 'Maximum video time (seconds):',
+    default: 600,
+    validate: val => !isNaN(val) && parseInt(val) > 0
+  },
+  {
+    type: 'input',
+    name: 'daysAgo',
+    message: 'Fetch clips from how many days ago?',
+    default: 7,
+    validate: val => !isNaN(val) && parseInt(val) > 0
+  },
+  {
+    type: 'input',
+    name: 'title',
+    message: 'Title for the final video compilation:',
+    default: 'Twitch Clips Compilation'
+  },
+  {
+    type: 'input',
+    name: 'part',
+    message: 'Starting part number for the video title:',
+    default: 1,
+    validate: val => !isNaN(val) && parseInt(val) > 0
+  }
 ]
 
 
 const runCLI = async () => {
-    const answers = await inquirer.prompt(questions);
+  const answers = await inquirer.prompt(questions);
 
-    const args = {
-        gameId: answers.gameId,
-        lowestViewCount: parseInt(answers.lowestViewCount),
-        maximumClips: answers.maximumClips > 0 ? parseInt(answers.maximumClips) : 60,
-        minVideoTime: parseInt(answers.minVideoTime),
-        maxVideoTime: parseInt(answers.maxVideoTime),
-        daysAgo: parseInt(answers.daysAgo)
+  const args = {
+    gameId: answers.gameId,
+    lowestViewCount: parseInt(answers.lowestViewCount),
+    maximumClips: answers.maximumClips > 0 ? parseInt(answers.maximumClips) : 60,
+    minVideoTime: parseInt(answers.minVideoTime),
+    maxVideoTime: parseInt(answers.maxVideoTime),
+    daysAgo: parseInt(answers.daysAgo),
+    title: answers.title,
+    part: parseInt(answers.part)
   };
 
 
@@ -73,8 +88,12 @@ const runCLI = async () => {
   console.log(`Maximum Clips: ${args.maximumClips}`);
   console.log(`Minimum Video Time: ${args.minVideoTime} seconds`);
   console.log(`Maximum Video Time: ${args.maxVideoTime} seconds`);
+  console.log(`Fetch Clips From: Last ${args.daysAgo} days`);
+  console.log(`Video Title: ${args.title}\n`);
+  console.log(`Starting Part Number: ${args.part}\n`);
 
-  const {confirm} = await inquirer.prompt({
+
+  const { confirm } = await inquirer.prompt({
     type: 'confirm',
     name: 'confirm',
     message: 'Do you want to proceed with these settings?',
@@ -86,7 +105,7 @@ const runCLI = async () => {
     process.exit(0);
   }
 
-   await mainProcess(args);
+  await mainProcess(args);
 }
 
 runCLI()

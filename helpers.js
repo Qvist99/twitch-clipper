@@ -1,211 +1,210 @@
-
 import dayjs from 'dayjs';
 import fetch from 'node-fetch';
 import path from 'path';
 import fs from 'fs';
 import puppeteer from 'puppeteer';
 import ffmpeg from 'fluent-ffmpeg';
-import { createCanvas, loadImage } from 'canvas';
+import { createCanvas, loadImage, } from 'canvas';
 import { spawn } from 'child_process';
 import { gameThumbnails } from './game-thumbnails.js';
+import { google } from 'googleapis';
+import readline from 'readline';
+
+export async function getAccesToken(client_id, client_secret) {
+  console.log("Fetching access token from Twitch...");
+
+  if (!client_id || !client_secret) {
+    throw new Error("Client ID and Client Secret are required to fetch the access token.");
+  }
+
+  console.log(`Client ID: ${client_id}`);
+  console.log(`Client Secret: ${client_secret}`);
+
+  const response = await fetch("https://id.twitch.tv/oauth2/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({
+      client_id: client_id,
+      client_secret: client_secret,
+      grant_type: "client_credentials"
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Error fetching access token: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
+export async function getClipsFromTwitch(accessToken, clientId, gameId, lowestViewCount, maximumClips = 60, daysAgo = 7) {
+  console.log("Fetching clips from Twitch...");
+
+  if (!accessToken || !clientId) {
+    throw new Error("Access Token and Client ID are required to fetch clips.");
+  }
+
+  if (!gameId) {
+    throw new Error("Game ID is required to fetch clips.");
+  }
 
 
 
-export async function getAccesToken(client_id, client_secret){
-    console.log("Fetching access token from Twitch...");
+  const now = dayjs()
+  console.log(now.toISOString());
+  const startDate = now.subtract(daysAgo, 'day')
+  console.log(startDate.toISOString());
+  const baseUrl = "https://api.twitch.tv/helix/clips";
 
-    if (!client_id || !client_secret) {
-        throw new Error("Client ID and Client Secret are required to fetch the access token.");
+
+
+  let allClips = [];
+  let cursor = null;
+  let keepFetching = true;
+
+  while (keepFetching) {
+    const params = new URLSearchParams({
+      game_id: gameId,
+      started_at: startDate.toISOString(),
+      ended_at: now.toISOString(),
+      first: "100"
+    });
+
+    if (cursor) {
+      params.append("after", cursor);
     }
 
-    console.log(`Client ID: ${client_id}`);
-    console.log(`Client Secret: ${client_secret}`);
-
-    const response = await fetch("https://id.twitch.tv/oauth2/token", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: new URLSearchParams({
-            client_id: client_id,
-            client_secret: client_secret,
-            grant_type: "client_credentials"
-        })
+    const response = await fetch(`${baseUrl}?${params.toString()}`, {
+      method: "GET",
+      headers: {
+        "Client-ID": clientId,
+        "Authorization": `Bearer ${accessToken}`,
+      }
     });
 
     if (!response.ok) {
-        throw new Error(`Error fetching access token: ${response.statusText}`);
+      throw new Error(`Error fetching clips: ${response.statusText}`);
     }
 
-    const data = await response.json();
-    return data.access_token;
-}
+    const result = await response.json();
 
-export async function getClipsFromTwitch(accessToken, clientId, gameId , lowestViewCount, maximumClips = 60, daysAgo = 7) {
-    console.log("Fetching clips from Twitch...");
+    const filtered = result.data.filter(clip => clip.view_count >= lowestViewCount);
 
-    if (!accessToken || !clientId) {
-        throw new Error("Access Token and Client ID are required to fetch clips.");
+    // Make sure we don't exceed the maximum number of clips inside of allClips
+    if (allClips.length + filtered.length > maximumClips) {
+      // Make sure videos with the lowest view count are removed first
+      filtered.sort((a, b) => a.view_count - b.view_count);
+      const excessCount = allClips.length + filtered.length - maximumClips;
+      filtered.splice(0, excessCount);
+      console.log(`Exceeded maximum clips limit. Removed ${excessCount} clips with the lowest view counts.`);
     }
 
-    if (!gameId) {
-        throw new Error("Game ID is required to fetch clips.");
+    allClips.push(...filtered);
+
+    console.log(`Fetched ${filtered.length} clips, total: ${allClips.length}`);
+
+    // We fetch until we get clips with less views than the lowestViewCount or no more clips are available
+    if (result.data.length !== filtered.length || !result.pagination?.cursor || allClips.length >= maximumClips) {
+      keepFetching = false;
+    } else {
+      cursor = result.pagination.cursor;
     }
+  }
 
-
-
-    const now = dayjs()
-    console.log(now.toISOString());
-    const startDate = now.subtract(daysAgo, 'day')
-    console.log(startDate.toISOString());
-    const baseUrl = "https://api.twitch.tv/helix/clips";
-
-
-
-let allClips = [];
-    let cursor = null;
-    let keepFetching = true;
-
-    while (keepFetching) {
-        const params = new URLSearchParams({
-            game_id: gameId,
-            started_at: startDate.toISOString(),
-            ended_at: now.toISOString(),
-            first: "100"
-        });
-
-        if (cursor) {
-            params.append("after", cursor);
-        }
-
-        const response = await fetch(`${baseUrl}?${params.toString()}`, {
-            method: "GET",
-            headers: {
-                "Client-ID": clientId,
-                "Authorization": `Bearer ${accessToken}`,
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error(`Error fetching clips: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-
-        const filtered = result.data.filter(clip => clip.view_count >= lowestViewCount);
-
-        // Make sure we don't exceed the maximum number of clips inside of allClips
-        if (allClips.length + filtered.length > maximumClips) {
-            // Make sure videos with the lowest view count are removed first
-            filtered.sort((a, b) => a.view_count - b.view_count);
-            const excessCount = allClips.length + filtered.length - maximumClips;
-            filtered.splice(0, excessCount);
-            console.log(`Exceeded maximum clips limit. Removed ${excessCount} clips with the lowest view counts.`);
-        }
-        
-        allClips.push(...filtered);
-
-        console.log(`Fetched ${filtered.length} clips, total: ${allClips.length}`);
-
-        // We fetch until we get clips with less views than the lowestViewCount or no more clips are available
-        if (result.data.length !== filtered.length || !result.pagination?.cursor || allClips.length >= maximumClips) {
-            keepFetching = false;
-        } else {
-            cursor = result.pagination.cursor;
-        }
-    }
-
-    return allClips;
+  return allClips;
 
 }
 
 export async function downloadClip(clip) {
-    const clipUrl = clip.url;
-    const outputDir = path.join('clips');
-    const outputPath = path.join(outputDir, `${clip.id}.mp4`);
+  const clipUrl = clip.url;
+  const outputDir = path.join('clips');
+  const outputPath = path.join(outputDir, `${clip.id}.mp4`);
 
-    fs.mkdirSync(outputDir, { recursive: true });
+  fs.mkdirSync(outputDir, { recursive: true });
 
-    console.log(`🚀 Visiting: ${clipUrl}`);
+  console.log(`🚀 Visiting: ${clipUrl}`);
 
-    const browser = await puppeteer.launch({
-        headless: true, // Set to false if we want to see the browser
-        defaultViewport: null,
-        args: ['--window-size=1920,1080']
+  const browser = await puppeteer.launch({
+    headless: true, // Set to false if we want to see the browser
+    defaultViewport: null,
+    args: ['--window-size=1920,1080']
+  });
+
+  const page = await browser.newPage();
+  await page.goto(clipUrl, { waitUntil: 'networkidle2' });
+
+  // Find and click the Share button
+  const buttons = await page.$$('button');
+  let shareButton = null;
+  for (const btn of buttons) {
+    const text = await btn.evaluate(node => node.innerText.trim());
+    if (text.toLowerCase() === 'share') {
+      shareButton = btn;
+      break;
+    }
+  }
+
+  if (!shareButton) {
+    console.warn('❌ Share button not found.');
+    await browser.close();
+    return;
+  }
+
+  console.log('✅ Clicking Share button...');
+  await shareButton.click();
+  await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for the share menu to open
+
+  // Find the Download Landscape Version link
+  const mp4Url = await page.evaluate(() => {
+    const anchors = Array.from(document.querySelectorAll('a'));
+    const link = anchors.find(a => {
+      const text = a.textContent?.replace(/\s+/g, ' ').trim().toLowerCase();
+      return text === 'download landscape version' && a.href.includes('.mp4');
     });
+    return link?.href || null;
+  });
 
-    const page = await browser.newPage();
-    await page.goto(clipUrl, { waitUntil: 'networkidle2' });
+  if (!mp4Url) {
+    console.error('❌ Could not find download link.');
+    await browser.close();
+    return;
+  }
 
-    // Find and click the Share button
-    const buttons = await page.$$('button');
-    let shareButton = null;
-    for (const btn of buttons) {
-        const text = await btn.evaluate(node => node.innerText.trim());
-        if (text.toLowerCase() === 'share') {
-            shareButton = btn;
-            break;
-        }
+  console.log(`📥 Download URL: ${mp4Url}`);
+
+  // Use Puppeteer's user agent + referer in node-fetch
+  const userAgent = await page.evaluate(() => navigator.userAgent);
+
+  await browser.close(); // We don't need Puppeteer anymore
+
+  // Download in Node using fetch with proper headers
+  console.log('⬇️ Downloading with node-fetch...');
+  const res = await fetch(mp4Url, {
+    headers: {
+      'User-Agent': userAgent,
+      'Referer': clipUrl
     }
+  });
 
-    if (!shareButton) {
-        console.warn('❌ Share button not found.');
-        await browser.close();
-        return;
-    }
+  if (!res.ok) {
+    throw new Error(`❌ Failed to download clip: ${res.status} ${res.statusText}`);
+  }
 
-    console.log('✅ Clicking Share button...');
-    await shareButton.click();
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for the share menu to open
+  const buffer = await res.arrayBuffer();
+  fs.writeFileSync(outputPath, Buffer.from(buffer));
+  console.log(`✅ Clip saved to: ${outputPath}`);
 
-    // Find the Download Landscape Version link
-    const mp4Url = await page.evaluate(() => {
-        const anchors = Array.from(document.querySelectorAll('a'));
-        const link = anchors.find(a => {
-            const text = a.textContent?.replace(/\s+/g, ' ').trim().toLowerCase();
-            return text === 'download landscape version' && a.href.includes('.mp4');
-        });
-        return link?.href || null;
-    });
-
-    if (!mp4Url) {
-        console.error('❌ Could not find download link.');
-        await browser.close();
-        return;
-    }
-
-    console.log(`📥 Download URL: ${mp4Url}`);
-
-    // Use Puppeteer's user agent + referer in node-fetch
-    const userAgent = await page.evaluate(() => navigator.userAgent);
-
-    await browser.close(); // We don't need Puppeteer anymore
-
-    // Download in Node using fetch with proper headers
-    console.log('⬇️ Downloading with node-fetch...');
-    const res = await fetch(mp4Url, {
-        headers: {
-            'User-Agent': userAgent,
-            'Referer': clipUrl
-        }
-    });
-
-    if (!res.ok) {
-        throw new Error(`❌ Failed to download clip: ${res.status} ${res.statusText}`);
-    }
-
-    const buffer = await res.arrayBuffer();
-    fs.writeFileSync(outputPath, Buffer.from(buffer));
-    console.log(`✅ Clip saved to: ${outputPath}`);
-
-    return {
-        filePath: outputPath,
-        broadcaster: clip.broadcaster_name,
-        duration: clip.duration,
-        viewCount: clip.view_count,
-        url: clipUrl,
-        thumbnail: clip.thumbnail_url
-    }
+  return {
+    filePath: outputPath,
+    broadcaster: clip.broadcaster_name,
+    duration: clip.duration,
+    viewCount: clip.view_count,
+    url: clipUrl,
+    thumbnail: clip.thumbnail_url
+  }
 }
 // add max videos to distributeClipsForVideo function
 export function distributeClipsForVideo(clips, minVideoTime, maxVideoTime, maxVideos) {
@@ -284,7 +283,7 @@ export async function callPythonVideoComposer(videoData, index, gameId) {
     let stderrBuffer = '';
     pythonProcess.stderr.on('data', (data) => {
       stderrBuffer += data.toString();
-       if (stderrBuffer.length > 1000) {
+      if (stderrBuffer.length > 1000) {
         console.error(`[PYTHON ERROR] ${stderrBuffer.trim()}`);
         stderrBuffer = '';
       }
@@ -391,8 +390,276 @@ export async function cleanUpTempFolderAndClipsFolder() {
 }
 
 
+export async function getYTrefreshToken(clientId, clientSecret, redirectUri) {
+  const oauth2Client = new google.auth.OAuth2(
+    clientId,
+    clientSecret,
+    redirectUri
+  )
+
+  const scopes = [
+    'https://www.googleapis.com/auth/youtube.upload',
+    'https://www.googleapis.com/auth/youtube'
+  ]
 
 
+  const authUrl = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: scopes
+  });
+
+  console.log('Authorize this app by visiting this url:\n', authUrl);
+
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  rl.question('\nEnter the code from that page here: ', async (code) => {
+    const { tokens } = await oauth2Client.getToken(code);
+    console.log('\n✅ Your refresh token is:\n', tokens.refresh_token);
+    rl.close();
+  });
+
+}
+
+export async function uploadVideoToYoutube(
+  oauthSecrets,
+  videoPath,
+  title,
+  description,
+  thumbnailPath,
+  tags = [],
+  categoryId = '20', // Gaming category
+) {
 
 
+  if (!fs.existsSync(videoPath)) {
+    throw new Error(`Video file does not exist at path: ${videoPath}`);
+  }
+
+  console.log("Starting youtube upload...");
+
+  const oauth2Client = new google.auth.OAuth2(
+    oauthSecrets.client_id,
+    oauthSecrets.client_secret,
+    oauthSecrets.redirect_uri
+  );
+
+  oauth2Client.setCredentials({
+    refresh_token: oauthSecrets.refresh_token
+  });
+
+
+  const youtube = google.youtube({
+    version: "v3",
+    auth: oauth2Client
+  })
+
+  try {
+    const res = await youtube.videos.insert({
+      part: ["snippet", "status"],
+      requestBody: {
+        snippet: {
+          title,
+          description,
+          tags,
+          categoryId,
+        },
+        status: {
+          privacyStatus: "private",
+          publishAt: getNext1630UTC(),
+          selfDeclaredMadeForKids: false
+        }
+      },
+      media: {
+        body: fs.createReadStream(videoPath)
+      }
+    }
+    )
+
+    const videoId = res.data.id;
+    console.log(`✅ Video uploaded with ID: ${videoId}`);
+
+
+    // Update the thumbnail for the video
+
+    if (thumbnailPath && fs.existsSync(thumbnailPath)) {
+      try {
+        console.log("uploading thumbnail...");
+        await youtube.thumbnails.set({
+          videoId: videoId,
+          media: {
+            body: fs.createReadStream(thumbnailPath)
+          }
+        })
+        console.log("✅ Thumbnail uploaded successfully.");
+
+      } catch (error) {
+        console.error("Error uploading thumbnail:", error.message);
+      }
+
+    }
+
+
+  } catch (error) {
+    if (error.errors) {
+      for (const err of error.errors) {
+        console.error(`YouTube API error: ${err.reason} - ${err.message}`);
+      }
+    } else {
+      console.error("Error uploading video to YouTube:", error.message);
+    }
+    // We can add retry logic here if needed in the future
+
+    throw error;
+  }
+}
+
+
+export async function generateThumbnailForVideo(imageUrl, gameName, part) {
+
+
+  const WIDTH = 1280;
+  const HEIGHT = 720;
+
+  const PAD_x = 70;
+  const PAD_y = 100;
+
+  const RED_HEIGHT = 158;
+  const BLACK_HEIGHT = 97;
+  const YELLOW_HEIGHT = 129;
+  const TEXT_PAD = 10;
+
+  const canvas = createCanvas(WIDTH, HEIGHT);
+  const ctx = canvas.getContext('2d');
+
+  // load the background image
+
+  const bgImage = await loadImage(resizeImageUrl(imageUrl, WIDTH, HEIGHT));
+  ctx.drawImage(bgImage, 0, 0, WIDTH, HEIGHT);
+
+  // Load texture
+  const texturePath = path.join(process.cwd(), "thumbnail_utils", "fabric.png");
+  const texture = await loadImage(texturePath);
+
+  function drawTexturedBox(x, y, width, height, color) {
+    // Draw the base color
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, width, height);
+
+    // Apply texture overlay with clipping
+    ctx.save();
+
+    // Clip to the box area
+    ctx.beginPath();
+    ctx.rect(x, y, width, height);
+    ctx.clip();
+
+    // Tile the texture manually across the box
+    for (let ty = y; ty < y + height; ty += texture.height) {
+      for (let tx = x; tx < x + width; tx += texture.width) {
+        ctx.drawImage(texture, tx, ty);
+      }
+    }
+
+    ctx.restore();
+
+    // Now blend the color on top using a multiply-like effect
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, width, height);
+    ctx.restore();
+  }
+
+
+  function drawTextBox(text, yOffset, height, fontSize, boxColor, textColor, textBorderColor) {
+    ctx.font = `bold ${fontSize}px "Sans"`;
+    const textWidth = ctx.measureText(text).width;
+    const boxWidth = textWidth + TEXT_PAD * 2;
+
+    drawTexturedBox(PAD_x, yOffset, boxWidth, height, boxColor);
+
+    ctx.textBaseline = "middle";
+
+    // Draw text border/stroke first
+    ctx.strokeStyle = textBorderColor;
+    ctx.lineWidth = 4; // Adjust thickness as needed
+    ctx.strokeText(text, PAD_x + TEXT_PAD, yOffset + height / 2);
+
+    // Draw text fill on top
+    ctx.fillStyle = textColor;
+    ctx.fillText(text, PAD_x + TEXT_PAD, yOffset + height / 2);
+
+    return height;
+  }
+
+
+  let currentY = PAD_y;
+
+  currentY += drawTextBox(
+    gameName.toUpperCase(),
+    currentY,
+    RED_HEIGHT,
+    128,
+    "#FF250D",
+    "white",
+    "#A3A3A3"
+  );
+
+  currentY += drawTextBox(
+    "DAILY CLIPS",
+    currentY,
+    BLACK_HEIGHT,
+    79,
+    "#5f5f5fff",
+    "white",
+    "#A3A3A3"
+  );
+
+  drawTextBox(
+    `#${part}`,
+    currentY,
+    YELLOW_HEIGHT,
+    86,
+    "#F1CF12",
+    "black",
+    "#D0CA06"
+  );
+
+
+  const outputDir = path.join(process.cwd(), "output");
+  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+
+  const filePath = path.join(outputDir, `thumbnail_video_${part}.png`);
+  const buffer = canvas.toBuffer("image/png");
+
+  fs.writeFileSync(filePath, buffer);
+
+  console.log(`Thumbnail saved: ${filePath}`);
+
+  return filePath;
+
+}
+
+function resizeImageUrl(url, width, height) {
+  //find /preview-480x272.jpg and replace with /preview-widthxheight.jpg
+  return url.replace(/preview-\d+x\d+\.jpg/, `preview-${width}x${height}.jpg`);
+}
+
+
+function getNext1630UTC() {
+  const now = new Date();
+
+  let next1630 = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    16, 30, 0
+  ));
+
+  // If it's already past 16:30 UTC today, schedule for tomorrow
+  if (now >= next1630) {
+    next1630.setUTCDate(next1630.getUTCDate() + 1);
+  }
+
+  return next1630.toISOString();
+}
 
