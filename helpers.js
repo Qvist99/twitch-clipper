@@ -9,6 +9,7 @@ import { spawn } from 'child_process';
 import { gameThumbnails } from './game-thumbnails.js';
 import { google } from 'googleapis';
 import readline from 'readline';
+import { blacklists } from './blacklists.js';
 
 export async function getAccesToken(client_id, client_secret) {
   console.log("Fetching access token from Twitch...");
@@ -91,7 +92,13 @@ export async function getClipsFromTwitch(accessToken, clientId, gameId, lowestVi
 
     const result = await response.json();
 
-    const filtered = result.data.filter(clip => clip.view_count >= lowestViewCount);
+    // remove blacklisted broadcasters from the filtered clips and clips with view count lower than lowestViewCount
+    const blacklistBroadcasters = blacklists[gameId] || []; // Blacklisted broadcasters to exclude from the final video compilation
+    const filtered =
+      result.data.filter(clip =>
+        clip.view_count >= lowestViewCount &&
+        !blacklistBroadcasters.includes(clip.broadcaster_name)
+      );
 
     // Make sure we don't exceed the maximum number of clips inside of allClips
     if (allClips.length + filtered.length > maximumClips) {
@@ -103,6 +110,9 @@ export async function getClipsFromTwitch(accessToken, clientId, gameId, lowestVi
     }
 
     allClips.push(...filtered);
+
+    //filter through the clips to make sure we dont have any duplicates
+    allClips = dedupeClips(allClips);
 
     console.log(`Fetched ${filtered.length} clips, total: ${allClips.length}`);
 
@@ -117,6 +127,111 @@ export async function getClipsFromTwitch(accessToken, clientId, gameId, lowestVi
   return allClips;
 
 }
+
+
+export function dedupeClips(clips) {
+  for (const clip of clips) {
+    if (clip.vod_offset != null && clip.duration != null) {
+      clip.realStart = clip.vod_offset - clip.duration;
+      clip.realEnd = clip.vod_offset;
+    } else {
+      clip.realStart = null;
+      clip.realEnd = null;
+    }
+  }
+
+  const byBroadcaster = new Map();
+  for (const c of clips) {
+    if (!byBroadcaster.has(c.broadcaster_id)) byBroadcaster.set(c.broadcaster_id, []);
+    byBroadcaster.get(c.broadcaster_id).push(c);
+  }
+
+  const result = [];
+
+  for (const list of byBroadcaster.values()) {
+
+    list.sort((a, b) => {
+      if (a.realStart === null && b.realStart === null) {
+        return new Date(a.created_at) - new Date(b.created_at);
+      }
+      if (a.realStart === null) return 1;
+      if (b.realStart === null) return -1;
+      return a.realStart - b.realStart;
+    });
+
+    let cluster = [];
+
+    function flushCluster() {
+      if (cluster.length === 0) return;
+      cluster.sort((a, b) => b.view_count - a.view_count);
+      result.push(cluster[0]);
+      cluster = [];
+    }
+
+    for (const clip of list) {
+      if (cluster.length === 0) {
+        cluster.push(clip);
+        continue;
+      }
+
+      const last = cluster[cluster.length - 1];
+
+      // -----------------------------
+      // CASE 1: Both clips have offsets
+      // -----------------------------
+      if (clip.realStart !== null && last.realStart !== null) {
+
+        // Video IDs must match
+        if (clip.video_id !== last.video_id) {
+          flushCluster();
+          cluster.push(clip);
+          continue;
+        }
+
+        const overlap =
+          Math.min(last.realEnd, clip.realEnd) -
+          Math.max(last.realStart, clip.realStart);
+
+        if (overlap > 2) {
+          cluster.push(clip);
+        } else {
+          flushCluster();
+          cluster.push(clip);
+        }
+        continue;
+      }
+
+      // -----------------------------
+      // CASE 2: Both have null offsets → use created_at fallback
+      // -----------------------------
+      if (clip.realStart === null && last.realStart === null) {
+        const t1 = new Date(clip.created_at);
+        const t2 = new Date(last.created_at);
+        const diffSec = Math.abs((t1 - t2) / 1000);
+
+        if (diffSec <= 60) {
+          cluster.push(clip);
+        } else {
+          flushCluster();
+          cluster.push(clip);
+        }
+        continue;
+      }
+
+      // -----------------------------
+      // CASE 3: Mixed offset/non-offset
+      // -----------------------------
+      flushCluster();
+      cluster.push(clip);
+    }
+
+    flushCluster();
+  }
+
+  return result;
+}
+
+
 
 export async function downloadClip(clip) {
   const clipUrl = clip.url;

@@ -1,6 +1,5 @@
 import fs from 'fs';
 import { getClipsFromTwitch, getAccesToken, downloadClip, distributeClipsForVideo, callPythonVideoComposer, prepareClipOverlays, cleanUpTempFolderAndClipsFolder, uploadVideoToYoutube, generateThumbnailForVideo } from './helpers.js';
-import { blacklists } from './blacklists.js';
 import { configDotenv } from 'dotenv';
 configDotenv();
 
@@ -59,17 +58,13 @@ export async function mainProcess({
     // filter out potentiall undefined results in the downloadedClips array
     const filteredDownloadedClips = downloadedClips.filter(clip => clip !== undefined);
 
-    const blacklistBroadcasters = blacklists[gameId] || []; // Blacklisted broadcasters to exclude from the final video compilation
-
-    const filteredClips = filteredDownloadedClips.filter(clip => !blacklistBroadcasters.includes(clip.broadcaster));
-
-    if (filteredClips.length === 0) {
+    if (filteredDownloadedClips.length === 0) {
         console.error("No clips left after filtering. Exiting.");
         process.exit(1);
     }
 
 
-    const distributedClips = distributeClipsForVideo(filteredClips, minVideoTime, maxVideoTime);
+    const distributedClips = distributeClipsForVideo(filteredDownloadedClips, minVideoTime, maxVideoTime);
 
     await prepareClipOverlays(distributedClips, gameId);
 
@@ -136,7 +131,7 @@ export async function mainProcess({
     fs.mkdirSync(outputDir, { recursive: true });
     console.log(`✅ Recreated output folder: ${outputDir}`);
 
-    return 
+    return
     // Exit the process gracefully
     process.exit(0);
 
