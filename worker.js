@@ -52,11 +52,16 @@ cron.schedule('0 0 * * *', () => {
     { timezone: "UTC" }
 );
 
-// Initial run just for testing
-/* runDailyJob(); */
-
-
-
 // Keep the Node.js process running (when not using PM2)
 /* process.stdin.resume(); */
+
+
+
+
+/* 
+pm2 start ecosystem.config.cjs
+pm2 stop daily-worker
+pm2 restart daily-worker
+pm2 logs daily-worker
+*/
 

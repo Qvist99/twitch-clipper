@@ -136,7 +136,7 @@ export async function mainProcess({
     fs.mkdirSync(outputDir, { recursive: true });
     console.log(`✅ Recreated output folder: ${outputDir}`);
 
-
+    return 
     // Exit the process gracefully
     process.exit(0);
 

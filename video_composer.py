@@ -61,7 +61,7 @@ def main():
     
     # Build description text
     # In future we make this more dynamic loading in a template file or similar
-    description_lines = ["If you don’t want your clip featured in future videos, just shoot an email to twitchclipcomps@gmail.com \n\nIf you enjoyed the video, don’t forget to like and subscribe for more iRacing action every week! \n\nClip Credits:\n"]
+    description_lines = ["If you don’t want your clip featured in future videos, just shoot an email to twitchclipcomps@gmail.com \n\nIf you enjoyed the video, don’t forget to like and subscribe for more iRacing action every day! \n\nClip Credits:\n"]
     for i, clip in enumerate(clips_info):
         line = f"{i + 1}. {clip['broadcaster']} — {clip.get('url', 'URL not provided')}"
         description_lines.append(line)
