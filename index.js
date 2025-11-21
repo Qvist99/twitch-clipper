@@ -102,7 +102,6 @@ export async function mainProcess({
             client_id: process.env.YT_CLIENT_ID,
             client_secret: process.env.YT_CLIENT_SECRET,
             redirect_uri: process.env.YT_REDIRECT_URI,
-            refresh_token: process.env.YT_REFRESH_TOKEN
         }
 
 

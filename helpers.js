@@ -566,11 +566,8 @@ export async function uploadVideoToYoutube(
     oauthSecrets.redirect_uri
   );
 
-  /* oauth2Client.setCredentials({
-    refresh_token: oauthSecrets.refresh_token
-  }); */
-
   const storedTokens = loadTokens();
+  oauth2Client.setCredentials(storedTokens);
 
   oauth2Client.on("tokens", (tokens) => {
     const updated = { ...storedTokens, ...tokens };
