@@ -10,6 +10,7 @@ import { gameThumbnails } from './game-thumbnails.js';
 import { google } from 'googleapis';
 import readline from 'readline';
 import { blacklists } from './blacklists.js';
+import { saveTokens, loadTokens } from './tokenStore.js';
 
 export async function getAccesToken(client_id, client_secret) {
   console.log("Fetching access token from Twitch...");
@@ -520,17 +521,25 @@ export async function getYTrefreshToken(clientId, clientSecret, redirectUri) {
 
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
+    prompt: 'consent',
     scope: scopes
   });
 
   console.log('Authorize this app by visiting this url:\n', authUrl);
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  rl.question('\nEnter the code from that page here: ', async (code) => {
+
+  rl.question("\nEnter the code from that page here: ", async (code) => {
     const { tokens } = await oauth2Client.getToken(code);
-    console.log('\n✅ Your refresh token is:\n', tokens.refresh_token);
+
+    console.log("\n✅ Your refresh token is:\n", tokens.refresh_token);
+
+    // Save refresh token persistently
+    saveTokens(tokens);
+
     rl.close();
   });
+
 
 }
 
@@ -557,9 +566,21 @@ export async function uploadVideoToYoutube(
     oauthSecrets.redirect_uri
   );
 
-  oauth2Client.setCredentials({
+  /* oauth2Client.setCredentials({
     refresh_token: oauthSecrets.refresh_token
+  }); */
+
+  const storedTokens = loadTokens();
+
+  oauth2Client.on("tokens", (tokens) => {
+    const updated = { ...storedTokens, ...tokens };
+
+    if (tokens.refresh_token) {
+      console.log("🔄 New refresh token received from Google");
+    }
+    saveTokens(updated);
   });
+
 
 
   const youtube = google.youtube({
