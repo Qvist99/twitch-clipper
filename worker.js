@@ -1,4 +1,5 @@
 import { configDotenv } from 'dotenv';
+import { shouldRunFunction } from './helpers.js';
 configDotenv();
 
 import { mainProcess } from './index.js';
@@ -8,6 +9,12 @@ async function runDailyJob() {
     console.log(`[${new Date().toISOString()}] Starting daily job...`);
 
     const gameId = process.env.GAME_ID;
+
+    if (!shouldRunFunction(gameId)) {
+        console.log(`[${new Date().toISOString()}] Skipping job for gameId ${gameId} as per configuration.`);
+        process.exit(0);
+    }
+
     const part = getCurrentPart(gameId);
 
     try {
@@ -47,6 +54,5 @@ pm2 start ecosystem.config.cjs
 pm2 stop daily-worker
 pm2 restart daily-worker
 pm2 logs daily-worker
-pm2 start ecosystem.config.cjs --only daily-worker --cron "0 0 * * *"
 */
 

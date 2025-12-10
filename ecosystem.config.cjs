@@ -13,6 +13,7 @@ module.exports = {
             autorestart: false,        // disable auto-restart for normal completion
             max_memory_restart: "1G",
             watch: false,
+            cron_restart: "0 0 * * *", // run at midnight every day
 
             env: {
                 NODE_ENV: "production"

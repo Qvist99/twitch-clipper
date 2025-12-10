@@ -796,3 +796,46 @@ function getNext1630UTC() {
   return next1630.toISOString();
 }
 
+
+
+export function shouldRunFunction(gameId) {
+  const STATUS_FILE = path.resolve('./run-status.json');
+
+  let runStatus = {};
+  if (fs.existsSync(STATUS_FILE)) {
+    const data = fs.readFileSync(STATUS_FILE, 'utf-8');
+    runStatus = JSON.parse(data);
+  }
+
+  // If this gameId exists and is false, exit early and flip it to true
+
+  if (!runStatus[gameId]) {
+    console.error("No run status object found for gameId:", gameId);
+    //return false as we dont want the code to execute
+    return false;
+  }
+
+
+  if (runStatus[gameId].should_run === false) {
+    console.log(`[${new Date().toISOString()}] Skipping run for gameId ${gameId}. Setting flag to true.`);
+    runStatus[gameId].should_run = true;
+    fs.writeFileSync(STATUS_FILE, JSON.stringify(runStatus, null, 2));
+    return false;
+  }
+
+
+  return true;
+}
+
+/* async function updateRunStatus(gameId, status) {
+  const STATUS_FILE = path.resolve('./run-status.json');
+
+  let runStatus = {};
+  if (fs.existsSync(STATUS_FILE)) {
+    const data = fs.readFileSync(STATUS_FILE, 'utf-8');
+    runStatus = JSON.parse(data);
+  }
+  runStatus[gameId] = status;
+  fs.writeFileSync(STATUS_FILE, JSON.stringify(runStatus, null, 2));
+} */
+
