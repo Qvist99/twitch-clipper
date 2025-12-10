@@ -1,20 +1,12 @@
 import { configDotenv } from 'dotenv';
 configDotenv();
 
-import cron from 'node-cron';
 import { mainProcess } from './index.js';
 import { getCurrentPart, incrementPart } from './statemanager.js';
 
-let isRunning = false;
-
 async function runDailyJob() {
-    if (isRunning) {
-        console.log(`[${new Date().toISOString()}] Skipping — job already running.`);
-        return;
-    }
-
-    isRunning = true;
     console.log(`[${new Date().toISOString()}] Starting daily job...`);
+
     const gameId = process.env.GAME_ID;
     const part = getCurrentPart(gameId);
 
@@ -30,31 +22,23 @@ async function runDailyJob() {
             daysAgo: Number(process.env.DAYS_AGO),
             title: process.env.VIDEO_TITLE,
             part: part
-        })
-
+        });
 
         incrementPart(gameId);
+
+        console.log(`[${new Date().toISOString()}] Daily job completed successfully.`);
 
     } catch (error) {
         console.error("Error during daily job execution:", error);
         process.exit(1);
     }
 
-    isRunning = false;
-    console.log(`[${new Date().toISOString()}] Daily job completed.`);
-
+    // Exit cleanly when done
+    process.exit(0);
 }
 
-// Cron running every day at midnight UTC
-cron.schedule('0 0 * * *', () => {
-    runDailyJob();
-},
-    { timezone: "UTC" }
-);
-
-// Keep the Node.js process running (when not using PM2)
-/* process.stdin.resume(); */
-
+// Run the daily job immediately (PM2 will schedule via cron)
+runDailyJob();
 
 
 
@@ -63,5 +47,6 @@ pm2 start ecosystem.config.cjs
 pm2 stop daily-worker
 pm2 restart daily-worker
 pm2 logs daily-worker
+pm2 start ecosystem.config.cjs --only daily-worker --cron "0 0 * * *"
 */
 

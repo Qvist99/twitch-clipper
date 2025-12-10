@@ -4,22 +4,19 @@ module.exports = {
             name: "daily-worker",
             script: "./worker.js",
 
-            //logging
+            // Logging
             out_file: "./logs/worker-out.log",
             err_file: "./logs/worker-err.log",
             log_date_format: "YYYY-MM-DD HH:mm:ss",
 
-            //stability
-            autorestart: true,
+            // Stability
+            autorestart: false,        // disable auto-restart for normal completion
             max_memory_restart: "1G",
             watch: false,
-
 
             env: {
                 NODE_ENV: "production"
             }
-
-
         }
     ]
 }
