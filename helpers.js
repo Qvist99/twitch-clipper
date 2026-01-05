@@ -42,7 +42,7 @@ export async function getAccesToken(client_id, client_secret) {
   return data.access_token;
 }
 
-export async function getClipsFromTwitch(accessToken, clientId, gameId, lowestViewCount, maximumClips = 60, daysAgo = 7) {
+export async function getClipsFromTwitch(accessToken, clientId, gameId, lowestViewCount, daysAgo = 7, maxVideoTime, minVideoTime) {
   console.log("Fetching clips from Twitch...");
 
   if (!accessToken || !clientId) {
@@ -51,6 +51,10 @@ export async function getClipsFromTwitch(accessToken, clientId, gameId, lowestVi
 
   if (!gameId) {
     throw new Error("Game ID is required to fetch clips.");
+  }
+
+  if (!maxVideoTime || !minVideoTime) {
+    throw new Error("Max and Min video time are required to fetch clips.");
   }
 
 
@@ -62,10 +66,12 @@ export async function getClipsFromTwitch(accessToken, clientId, gameId, lowestVi
   const baseUrl = "https://api.twitch.tv/helix/clips";
 
 
-
+  let durationOfAllClips = 0;
   let allClips = [];
   let cursor = null;
   let keepFetching = true;
+
+  const blacklistBroadcasters = blacklists[gameId] || []; // Blacklisted broadcasters to exclude from the final video compilation
 
   while (keepFetching) {
     const params = new URLSearchParams({
@@ -94,35 +100,49 @@ export async function getClipsFromTwitch(accessToken, clientId, gameId, lowestVi
     const result = await response.json();
 
     // remove blacklisted broadcasters from the filtered clips and clips with view count lower than lowestViewCount
-    const blacklistBroadcasters = blacklists[gameId] || []; // Blacklisted broadcasters to exclude from the final video compilation
     const filtered =
       result.data.filter(clip =>
         clip.view_count >= lowestViewCount &&
         !blacklistBroadcasters.includes(clip.broadcaster_name)
       );
 
-    // Make sure we don't exceed the maximum number of clips inside of allClips
-    if (allClips.length + filtered.length > maximumClips) {
-      // Make sure videos with the lowest view count are removed first
-      filtered.sort((a, b) => a.view_count - b.view_count);
-      const excessCount = allClips.length + filtered.length - maximumClips;
-      filtered.splice(0, excessCount);
-      console.log(`Exceeded maximum clips limit. Removed ${excessCount} clips with the lowest view counts.`);
+    if (filtered.length === 0) {
+      console.log("No more clips meeting the criteria were found.");
+      break;
     }
 
-    allClips.push(...filtered);
+
+    for (const clip of filtered) {
+      if (durationOfAllClips + clip.duration > maxVideoTime) {
+        keepFetching = false;
+        break;
+      }
+
+      allClips.push(clip);
+      durationOfAllClips += clip.duration;
+
+    }
 
     //filter through the clips to make sure we dont have any duplicates
     allClips = dedupeClips(allClips);
 
-    console.log(`Fetched ${filtered.length} clips, total: ${allClips.length}`);
+    // recalculate total duration after deduplication. Good if we have to run the loop multiple times
+    durationOfAllClips = allClips.reduce((sum, clip) => sum + clip.duration, 0);
 
-    // We fetch until we get clips with less views than the lowestViewCount or no more clips are available
-    if (result.data.length !== filtered.length || !result.pagination?.cursor || allClips.length >= maximumClips) {
+    console.log(`Total clips collected so far: ${allClips.length}, Total duration: ${durationOfAllClips.toFixed(2)} seconds`);
+
+    // Keep fetching as we yet have reached maxVideoTime or ran out of clips meeting the minimum view count criteria
+    if (!result.pagination?.cursor) {
       keepFetching = false;
     } else {
       cursor = result.pagination.cursor;
     }
+  }
+
+
+  if (durationOfAllClips < minVideoTime) {
+    console.log(`Total duration of clips (${durationOfAllClips.toFixed(2)} seconds) is less than the minimum required (${minVideoTime} seconds).`);
+    return [];
   }
 
   return allClips;
@@ -322,54 +342,33 @@ export async function downloadClip(clip) {
     thumbnail: clip.thumbnail_url
   }
 }
-// add max videos to distributeClipsForVideo function
-export function distributeClipsForVideo(clips, minVideoTime, maxVideoTime, maxVideos) {
+
+
+export function distributeClipsForVideo(clips) {
+  if (!clips.length) return [];
+
+  // Sort by view count descending
   const sorted = [...clips].sort((a, b) => b.viewCount - a.viewCount);
-  const totalDuration = sorted.reduce((sum, clip) => sum + clip.duration, 0);
-  const estimatedVideoCount = Math.ceil(totalDuration / maxVideoTime);
 
-  const buckets = Array.from({ length: estimatedVideoCount }, () => []);
+  const [topClip, ...rest] = sorted;
 
-  // Round-robin assign clips to buckets
-  for (let i = 0; i < sorted.length; i++) {
-    const bucketIndex = i % estimatedVideoCount;
-    buckets[bucketIndex].push(sorted[i]);
-  }
-
-  const result = [];
-
-  for (let i = 0; i < buckets.length; i++) {
-    const group = buckets[i];
-    const video = [];
-    let total = 0;
-
-    for (const clip of group) {
-      if (total + clip.duration > maxVideoTime) continue;
-      video.push(clip);
-      total += clip.duration;
+  return [
+    {
+      videoIndex: 1,
+      clips: [topClip, ...shuffleArray(rest)]
     }
-
-    if (total >= minVideoTime) {
-      video.sort((a, b) => b.viewCount - a.viewCount);
-      const [top, ...rest] = video;
-      result.push({
-        videoIndex: i + 1,
-        clips: [top, ...shuffleArray(rest)]
-      });
-    }
-  }
-
-  return result;
+  ];
 }
 
 function shuffleArray(array) {
-  const arr = [...array]; // copy to avoid mutating the original
+  const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
 }
+
 
 
 export async function callPythonVideoComposer(videoData, index, gameId) {
