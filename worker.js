@@ -24,7 +24,6 @@ async function runDailyJob() {
             gameId: gameId,
             minVideoTime: Number(process.env.MIN_VIDEO_TIME),
             maxVideoTime: Number(process.env.MAX_VIDEO_TIME),
-            maximumClips: Number(process.env.MAXIMUM_CLIPS),
             lowestViewCount: Number(process.env.LOWEST_VIEW_COUNT),
             daysAgo: Number(process.env.DAYS_AGO),
             title: process.env.VIDEO_TITLE,
