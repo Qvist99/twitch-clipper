@@ -54,5 +54,6 @@ pm2 start ecosystem.config.cjs
 pm2 stop daily-worker
 pm2 restart daily-worker
 pm2 logs daily-worker
+pm2 delete daily-worker
 */
 

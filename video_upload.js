@@ -19,7 +19,7 @@ const videoFilePath = `./output/final_video_1.mp4`;
 
 const thumbnailPath = await generateThumbnailForVideo(videosData[`video_1`].thumbnail, "IRACING", currentPart);
 
-const videoTitle = "iRacing Daily Clips #4 | November 2025 TEST TEST"
+const videoTitle = "iRacing Daily Clips #18 | December 2025"
 const description = videosData[`video_1`].description;
 const tags = []
 
